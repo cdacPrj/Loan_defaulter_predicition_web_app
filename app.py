@@ -14,10 +14,6 @@ from langchain_core.output_parsers import StrOutputParser
 
 
 
-# load model with joblib 
-# model =joblib.load("random_forest_modelv2.pkl")
-
-
 # Load the compressed model
 with bz2.BZ2File("modelbz2.pkl.bz2", "rb") as f:
     model = pickle.load(f)
@@ -86,22 +82,6 @@ def LLM_connection(feature_importance_dict,model_prediction,user_input):
     os.environ['GROQ_API_KEY'] = groq.get('GROQ_API_KEY')
 
     messages = [
-    # SystemMessage(content='''You are a Senior Underwriter at an NBFC responsible for assessing loan applications.
-    # You have conducted a thorough analysis considering 27 key factors that influence default risk. 
-    # You have been provided with the feature importance scores from a predictive model. 
-
-    # The model's prediction is as follows:
-    # - 1 indicates the applicant is predicted to default.
-    # - 0 indicates the applicant is predicted not to default.
-
-    # Based on this data, generate a concise, professional loan assessment report, summarizing the key reasons behind the loan approval or rejection decision. 
-
-    # Ensure the report is structured with:
-    # 1. **Introduction** : A brief summary of the applicant's profile.
-    # 2. **Key Risk Indicators** : The top contributing factors influencing the model's decision.
-    # 3. **Analysis & Justification** : A reasoned explanation of why the model predicted a default (or non-default). 
-    # 4. **Recommendation** : A final underwriting decision with supporting rationale.
-    # '''),
     SystemMessage(content='''You are a Senior Underwriter at an NBFC responsible for assessing loan applications.
     You have conducted a thorough analysis considering 27 key factors that influence default risk. 
     You have been provided with the feature importance scores from a predictive model. 
@@ -143,7 +123,7 @@ def LLM_connection(feature_importance_dict,model_prediction,user_input):
      'HasDependents', 'HasCoSigner', 'Default', 'EmploymentType',
      'MaritalStatus', 'LoanPurpose', 'Education']
     - **Feature Importance Scores:** {feature_importance_dict}
-    - **Model Prediction:** {"Defaulter" if model_prediction == 1 else "Not a Defaulter"}
+    - **Model Prediction:** model_prediction
     ''')
     ]
     parser = StrOutputParser()
@@ -176,8 +156,8 @@ def predict():
        'LoanPurpose_Other', "Education_Bachelor's", 'Education_High School',
        "Education_Master's", 'Education_PhD']
     
-    prediction = model.predict(model_input_features.reshape(1, -1))
-    output = 'Defaulter' if prediction[0] == 1 else 'Not a Defaulter'
+    prediction = model.predict_proba(model_input_features.reshape(1, -1))
+    output = 'Defaulter' if prediction[0][1] >=prediction[0][1]  else 'Not a Defaulter'
     
     feature_importance=get_features_imp_using_shap(model,model_input_features)
 
@@ -186,9 +166,9 @@ def predict():
 
 
     # LLM summarization
-    report =LLM_connection(feature_importance_dict,prediction,form_features)
+    report =LLM_connection(feature_importance_dict,output,form_features)
 
-    return render_template('result.html', prediction=output, feature_importance=feature_importance_dict,report=report)
+    return render_template('result.html', prediction=output,report=report,predict_prob=f"{prediction[0][1]:.2%}")
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run()
