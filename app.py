@@ -79,7 +79,7 @@ def get_features_imp_using_shap(model,inp):
     
     
 
-def LLM_connection(feature_importance_dict,model_prediction):
+def LLM_connection(feature_importance_dict,model_prediction,user_input):
     config = configparser.ConfigParser()
     config.read('config.ini')
     groq = config['groq']
@@ -138,6 +138,10 @@ def LLM_connection(feature_importance_dict,model_prediction):
     - **Recommendation:** A final underwriting decision with supporting rationale.
 
     ### Additional Information:
+    - **User inputs:** {user_input} and interpret them as values of ['Age', 'Income', 'LoanAmount', 'CreditScore', 'MonthsEmployed',
+     'NumCreditLines', 'InterestRate', 'LoanTerm', 'DTIRatio', 'HasMortgage',
+     'HasDependents', 'HasCoSigner', 'Default', 'EmploymentType',
+     'MaritalStatus', 'LoanPurpose', 'Education']
     - **Feature Importance Scores:** {feature_importance_dict}
     - **Model Prediction:** {"Defaulter" if model_prediction == 1 else "Not a Defaulter"}
     ''')
@@ -182,7 +186,7 @@ def predict():
 
 
     # LLM summarization
-    report =LLM_connection(feature_importance_dict,prediction)
+    report =LLM_connection(feature_importance_dict,prediction,form_features)
 
     return render_template('result.html', prediction=output, feature_importance=feature_importance_dict,report=report)
 
