@@ -4,6 +4,15 @@ import numpy as np
 import shap
 import pickle
 import bz2
+import configparser
+import os
+from langchain_groq import ChatGroq
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.output_parsers import StrOutputParser
+
+
+
+
 
 # load model with joblib 
 # model =joblib.load("random_forest_modelv2.pkl")
@@ -70,6 +79,76 @@ def get_features_imp_using_shap(model,inp):
     
     
 
+def LLM_connection(feature_importance_dict,model_prediction):
+    config = configparser.ConfigParser()
+    config.read('config.ini')
+    groq = config['groq']
+    os.environ['GROQ_API_KEY'] = groq.get('GROQ_API_KEY')
+
+    messages = [
+    # SystemMessage(content='''You are a Senior Underwriter at an NBFC responsible for assessing loan applications.
+    # You have conducted a thorough analysis considering 27 key factors that influence default risk. 
+    # You have been provided with the feature importance scores from a predictive model. 
+
+    # The model's prediction is as follows:
+    # - 1 indicates the applicant is predicted to default.
+    # - 0 indicates the applicant is predicted not to default.
+
+    # Based on this data, generate a concise, professional loan assessment report, summarizing the key reasons behind the loan approval or rejection decision. 
+
+    # Ensure the report is structured with:
+    # 1. **Introduction** : A brief summary of the applicant's profile.
+    # 2. **Key Risk Indicators** : The top contributing factors influencing the model's decision.
+    # 3. **Analysis & Justification** : A reasoned explanation of why the model predicted a default (or non-default). 
+    # 4. **Recommendation** : A final underwriting decision with supporting rationale.
+    # '''),
+    SystemMessage(content='''You are a Senior Underwriter at an NBFC responsible for assessing loan applications.
+    You have conducted a thorough analysis considering 27 key factors that influence default risk. 
+    You have been provided with the feature importance scores from a predictive model. 
+
+    The model's prediction is as follows:
+    - 1 indicates the applicant is predicted to default.
+    - 0 indicates the applicant is predicted not to default.
+
+    ### Formatting Instructions:
+    This content will be displayed inside an HTML page within a container with limited width (600px) and a scrollable text box.  
+    Ensure the report is **concise, well-structured, and easy to read** while keeping text within readable limits.
+
+    **Use the following structure:**
+    1. **Introduction** : A brief summary of the applicant's profile.
+    2. **Key Risk Indicators** : List the top 3-5 contributing factors with a short explanation.
+    3. **Analysis & Justification** : Provide a clear and **concise** explanation of the model's decision in 4-6 sentences.
+    4. **Recommendation** : Clearly state whether the loan should be **approved** or **rejected**, with a strong supporting rationale.
+
+    **Formatting Guidelines:**
+    - Use **short paragraphs** (max 2-3 lines per paragraph) to ensure readability.
+    - Use **bullet points** for key indicators.
+    - **Avoid overly long text blocks**, as the report is displayed inside a limited-height box.
+    - Ensure professional, formal tone.
+
+    Output an **easy-to-read, well-formatted report** that fits neatly within the provided HTML structure.'''),
+
+
+        HumanMessage(content=f'''Provide a formal report evaluating a loan application based on the given model's predictions. 
+
+    ### Loan Assessment Report:
+    - **Applicant Overview:** A brief summary of the applicant's profile.
+    - **Key Risk Indicators:** The top contributing factors influencing the model's decision.
+    - **Analysis & Justification:** A reasoned explanation of why the model predicted a default (or non-default).
+    - **Recommendation:** A final underwriting decision with supporting rationale.
+
+    ### Additional Information:
+    - **Feature Importance Scores:** {feature_importance_dict}
+    - **Model Prediction:** {"Defaulter" if model_prediction == 1 else "Not a Defaulter"}
+    ''')
+    ]
+    parser = StrOutputParser()
+    model = ChatGroq(model="llama3-8b-8192")
+
+    chain = model | parser
+    return chain.invoke(messages)
+
+
 
 
 app=Flask(__name__)
@@ -94,14 +173,18 @@ def predict():
        "Education_Master's", 'Education_PhD']
     
     prediction = model.predict(model_input_features.reshape(1, -1))
-    output = 'Defaulter' if prediction[0] == 1 else 'Not a defaulter'
+    output = 'Defaulter' if prediction[0] == 1 else 'Not a Defaulter'
     
     feature_importance=get_features_imp_using_shap(model,model_input_features)
 
     # features after one hot encoding
     feature_importance_dict = dict(zip(columnNames, feature_importance))
 
-    return render_template('result.html', prediction=output, feature_importance=feature_importance_dict)
+
+    # LLM summarization
+    report =LLM_connection(feature_importance_dict,prediction)
+
+    return render_template('result.html', prediction=output, feature_importance=feature_importance_dict,report=report)
 
 if __name__ == "__main__":
     app.run(debug=True)
